@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+*.md
+.env
+.env.*
+!.env.production
+.gitignore
+.eslintrc*
+eslint.config.mjs
+.vscode
+*.log
+coverage
+.turbo

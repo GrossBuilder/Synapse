@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== АУТЕНТИФИКАЦИЯ ====================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ==================== ПОЛЬЗОВАТЕЛИ ====================
+
+model User {
+  id              String         @id @default(cuid())
+  name            String?
+  email           String?        @unique
+  emailVerified   DateTime?
+  password        String?
+  phone           String?        @unique
+  image           String?
+  bio             String?        @db.Text
+  experienceLevel ExperienceLevel @default(BEGINNER)
+  region          String         @default("global")
+  status          UserStatus     @default(ACTIVE)
+  isVerified      Boolean        @default(false)
+  isPremium       Boolean        @default(false)
+  banReason       String?
+  bannedAt        DateTime?
+  bannedBy        String?
+  offenseCount    Int            @default(0)
+  lastActive      DateTime       @default(now())
+  totalChats      Int            @default(0)
+  totalSpent      Float          @default(0)
+  preferredRegion String         @default("global")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  interests     UserInterest[]
+  tags          UserTag[]
+  chatsSent     ChatSession[] @relation("ChatSender")
+  chatsReceived ChatSession[] @relation("ChatReceiver")
+  reports       Report[]      @relation("Reporter")
+  reportedBy    Report[]      @relation("Reported")
+  ratings       Rating[]      @relation("Rater")
+  ratedBy       Rating[]      @relation("Rated")
+  trustScore    TrustScore?
+  behaviors     SessionBehavior[]
+  subscription  Subscription?
+  dailyUsage    DailyUsage[]
+  boosts        Boost[]
+  payments      Payment[]
+  moderationLogs ContentModerationLog[]
+
+  @@index([status])
+  @@index([region])
+  @@index([lastActive])
+}
+
+enum UserStatus {
+  ACTIVE
+  WARNED
+  BANNED
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  EXPERT
+}
+
+// ==================== КАТЕГОРИИ И ИНТЕРЕСЫ ====================
+
+model Category {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  slug        String        @unique
+  icon        String
+  description String?
+  color       String        @default("#6366f1")
+  order       Int           @default(0)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+
+  subcategories Subcategory[]
+}
+
+model Subcategory {
+  id          String         @id @default(cuid())
+  name        String
+  slug        String
+  categoryId  String
+  icon        String?
+  isActive    Boolean        @default(true)
+
+  category    Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  interests   UserInterest[]
+
+  @@unique([categoryId, slug])
+}
+
+model UserInterest {
+  id            String      @id @default(cuid())
+  userId        String
+  subcategoryId String
+  createdAt     DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subcategory   Subcategory @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subcategoryId])
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  users UserTag[]
+}
+
+model UserTag {
+  id     String @id @default(cuid())
+  userId String
+  tagId  String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId])
+}
+
+// ==================== ЧАТ-СЕССИИ ====================
+
+model ChatSession {
+  id           String      @id @default(cuid())
+  senderId     String
+  receiverId   String
+  categorySlug String
+  duration     Int         @default(0) // секунды
+  status       ChatStatus  @default(ACTIVE)
+  startedAt    DateTime    @default(now())
+  endedAt      DateTime?
+
+  sender       User        @relation("ChatSender", fields: [senderId], references: [id])
+  receiver     User        @relation("ChatReceiver", fields: [receiverId], references: [id])
+  ratings      Rating[]
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([startedAt])
+  @@index([categorySlug])
+}
+
+enum ChatStatus {
+  ACTIVE
+  ENDED
+  REPORTED
+}
+
+// ==================== РЕЙТИНГИ И РЕПОРТЫ ====================
+
+model Rating {
+  id          String      @id @default(cuid())
+  raterId     String
+  ratedId     String
+  sessionId   String
+  score       Int         // 1-5
+  createdAt   DateTime    @default(now())
+
+  rater       User        @relation("Rater", fields: [raterId], references: [id])
+  rated       User        @relation("Rated", fields: [ratedId], references: [id])
+  session     ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([raterId, sessionId])
+  @@index([ratedId])
+}
+
+model Report {
+  id                      String         @id @default(cuid())
+  reporterId              String
+  reportedId              String
+  reason                  ReportReason
+  details                 String?        @db.Text
+  status                  ReportStatus   @default(PENDING)
+  severity                ReportSeverity @default(MEDIUM)
+  reporterLocale          String?        @default("en")
+  adminResponse           String?        @db.Text
+  adminResponseTranslated String?        @db.Text
+  respondedAt             DateTime?
+  resolvedAt              DateTime?
+  resolvedBy              String?
+  action                  String?
+  createdAt               DateTime       @default(now())
+
+  reporter   User       @relation("Reporter", fields: [reporterId], references: [id])
+  reported   User       @relation("Reported", fields: [reportedId], references: [id])
+
+  @@index([reportedId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([severity])
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  INAPPROPRIATE
+  UNDERAGE
+  SCAM
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+  AUTO_RESOLVED
+}
+
+enum ReportSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ==================== TRUST SCORE ====================
+
+model TrustScore {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  score           Int       @default(50) // 0–100
+  pool            TrustPool @default(REGULAR)
+  badge           TrustBadge @default(REGULAR)
+
+  // Факторы (кэш для быстрого чтения)
+  fSessionDuration  Float   @default(15) // 0–30
+  fSkipRate         Float   @default(12.5) // 0–25
+  fReportCleanness  Float   @default(10) // 0–20
+  fCameraUsage      Float   @default(7.5) // 0–15
+  fChatActivity     Float   @default(5) // 0–10
+
+  rapidSkipStreak Int       @default(0)
+  penaltyUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SessionBehavior {
+  id                  String   @id @default(cuid())
+  userId              String
+  sessionId           String
+  duration            Int      @default(0) // секунды
+  wasSkippedByPartner Boolean  @default(false)
+  skippedPartner      Boolean  @default(false)
+  cameraOnPercent     Int      @default(100) // 0–100
+  messagesSent        Int      @default(0)
+  reportFiled         Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum TrustPool {
+  TRUSTED
+  REGULAR
+  PROBATION
+}
+
+enum TrustBadge {
+  TRUSTED
+  REGULAR
+  LOW
+}
+
+// ==================== ПОДПИСКИ И МОНЕТИЗАЦИЯ ====================
+
+model Subscription {
+  id          String             @id @default(cuid())
+  userId      String             @unique
+  plan        SubscriptionPlan   @default(FREE)
+  status      SubscriptionStatus @default(ACTIVE)
+  startedAt   DateTime           @default(now())
+  expiresAt   DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyUsage {
+  id            String   @id @default(cuid())
+  userId        String
+  date          String   // YYYY-MM-DD
+  chatsUsed     Int      @default(0)
+  rematchesUsed Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+model Boost {
+  id          String    @id @default(cuid())
+  userId      String
+  type        BoostType
+  activatedAt DateTime  @default(now())
+  expiresAt   DateTime
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  amount      Float         // USD
+  currency    String        @default("USD")
+  type        PaymentType
+  itemId      String?       // ID подписки или буста
+  status      PaymentStatus @default(PENDING)
+  externalId  String?       // ID в платёжной системе
+  createdAt   DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+enum SubscriptionPlan {
+  FREE
+  PLUS
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+enum BoostType {
+  QUEUE
+  REGION
+  SPOTLIGHT
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  BOOST
+  VERIFIED_BADGE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ==================== АДМИНИСТРИРОВАНИЕ ====================
+
+model AdminSettings {
+  id                       String   @id @default("default")
+  autoModeration           Boolean  @default(true)
+  autoBanThreshold         Int      @default(5)
+  autoWarnThreshold        Int      @default(3)
+  maxReportsPerDay         Int      @default(10)
+  autoResolveAfterDays     Int      @default(7)
+  repeatOffenderMultiplier Boolean  @default(true)
+  chatTimeoutMinutes       Int      @default(30)
+  requireEmailVerification Boolean  @default(false)
+  maintenanceMode          Boolean  @default(false)
+  maxConcurrentUsers       Int      @default(1000)
+  minAccountAgeMinutes     Int      @default(0)
+  blockedWords             String[] @default(["spam", "scam", "phishing"])
+  allowedRegions           String[] @default(["global", "europe", "north-america", "south-america", "asia", "middle-east", "africa", "oceania", "cis"])
+  featureVideoChat         Boolean  @default(true)
+  featureTextChat          Boolean  @default(true)
+  featureFileSharing       Boolean  @default(false)
+  featureScreenShare       Boolean  @default(false)
+  updatedAt                DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type])
+}
+
+// ==================== КОНТЕНТ-МОДЕРАЦИЯ ====================
+
+model ContentModerationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // "nudity", "violence", "drugs", "weapons", "hate_symbols"
+  confidence  Float    // 0.0–1.0
+  action      String   // "blocked", "warned", "reported"
+  source      String   @default("pre-screen") // "pre-screen", "in-session", "manual"
+  sessionId   String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type])
+}
