@@ -176,6 +176,17 @@ function GroupRoomContent() {
         setChatMessages((prev) => [...prev, { sender: d.senderName, message: d.message, time: Date.now() }]);
       }),
 
+      on("message-blocked", (data: unknown) => {
+        const d = data as { reason: string; categories: string[]; violationCount: number };
+        setChatMessages((prev) => [...prev, {
+          sender: "⚠️",
+          message: d.reason === "too_many_violations"
+            ? t("chat.tooManyViolations")
+            : t("chat.messageBlocked"),
+          time: Date.now(),
+        }]);
+      }),
+
       on("group-room-error", (data: unknown) => {
         const d = data as { error: string };
         setError(d.error);

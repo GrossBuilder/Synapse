@@ -45,6 +45,15 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: "/admin/payments",
+    labelKey: "nav.payments",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/settings",
     labelKey: "nav.settings",
     icon: (
@@ -53,6 +62,16 @@ const NAV_ITEMS = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
+  },
+  {
+    href: "/admin/support",
+    labelKey: "nav.support",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+      </svg>
+    ),
+    badge: true,
   },
   {
     href: "/admin/guide",
@@ -77,6 +96,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [pendingReports, setPendingReports] = useState(0);
+  const [pendingSupport, setPendingSupport] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Skip layout for login page
@@ -89,6 +109,8 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
       pathname={pathname}
       pendingReports={pendingReports}
       setPendingReports={setPendingReports}
+      pendingSupport={pendingSupport}
+      setPendingSupport={setPendingSupport}
       sidebarOpen={sidebarOpen}
       setSidebarOpen={setSidebarOpen}
       onLogout={async () => {
@@ -106,6 +128,8 @@ function AdminShell({
   pathname,
   pendingReports,
   setPendingReports,
+  pendingSupport,
+  setPendingSupport,
   sidebarOpen,
   setSidebarOpen,
   onLogout,
@@ -114,6 +138,8 @@ function AdminShell({
   pathname: string;
   pendingReports: number;
   setPendingReports: (n: number) => void;
+  pendingSupport: number;
+  setPendingSupport: (n: number) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
   onLogout: () => void;
@@ -130,9 +156,10 @@ function AdminShell({
       if (res.ok) {
         const data = await res.json();
         setPendingReports(data.reportsPending || 0);
+        setPendingSupport(data.supportOpen || 0);
       }
     } catch { /* ignore */ }
-  }, [setPendingReports]);
+  }, [setPendingReports, setPendingSupport]);
 
   useEffect(() => {
     fetchReportCount();
@@ -163,7 +190,7 @@ function AdminShell({
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-4 px-3 space-y-1">
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map(item => {
             const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
             return (
@@ -181,11 +208,14 @@ function AdminShell({
               >
                 {item.icon}
                 <span>{t(item.labelKey)}</span>
-                {item.badge && pendingReports > 0 && (
-                  <span className="ml-auto bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
-                    {pendingReports}
-                  </span>
-                )}
+                {item.badge && (() => {
+                  const count = item.href === "/admin/support" ? pendingSupport : pendingReports;
+                  return count > 0 ? (
+                    <span className="ml-auto bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+                      {count}
+                    </span>
+                  ) : null;
+                })()}
               </Link>
             );
           })}

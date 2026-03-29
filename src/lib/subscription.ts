@@ -60,11 +60,27 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
 
 // ==================== ЦЕНЫ ====================
 
+export type BillingPeriod = "monthly" | "yearly";
+
 export const PRICING: Record<SubscriptionPlan, number> = {
   free: 0,
   plus: 4.99,
   pro: 9.99,
 };
+
+export const YEARLY_PRICING: Record<SubscriptionPlan, number> = {
+  free: 0,
+  plus: 49.99,   // ~$4.17/мес, скидка ~16%
+  pro: 99.99,    // ~$8.33/мес, скидка ~17%
+};
+
+export function getPlanPrice(plan: SubscriptionPlan, period: BillingPeriod): number {
+  return period === "yearly" ? YEARLY_PRICING[plan] : PRICING[plan];
+}
+
+export function getPlanDurationMs(period: BillingPeriod): number {
+  return period === "yearly" ? 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+}
 
 export const BOOST_PRICING: Record<BoostType, { price: number; durationMs: number; label: string }> = {
   queue: {

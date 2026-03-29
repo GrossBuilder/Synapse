@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { jwtVerify } from "jose";
 import { createAdapter } from "@socket.io/redis-adapter";
 import Redis from "ioredis";
+import { moderateText, type TextModerationResult } from "./text-moderation";
 
 const PORT = parseInt(process.env.SOCKET_PORT || "3001", 10);
 
@@ -336,15 +337,78 @@ const io = new Server(httpServer, {
 
 // Redis adapter for horizontal scaling
 const REDIS_URL = process.env.REDIS_URL;
+let redisClient: Redis | null = null;
 if (REDIS_URL) {
   try {
     const pubClient = new Redis(REDIS_URL);
     const subClient = pubClient.duplicate();
+    redisClient = pubClient.duplicate();
     io.adapter(createAdapter(pubClient, subClient));
     console.log("[Socket.IO] Redis adapter connected");
   } catch (e) {
     console.warn("[Socket.IO] Redis adapter failed, using in-memory:", e);
   }
+}
+
+// ==================== TEXT MODERATION TRACKING ====================
+
+/** In-memory fallback if Redis unavailable */
+const textViolations = new Map<string, { count: number; resetAt: number }>();
+
+/** Record a text moderation violation for a user */
+async function recordTextViolation(userId: string, result: TextModerationResult): Promise<number> {
+  const key = `textmod:violations:${userId}`;
+  const windowMs = 3600_000; // 1 hour window
+
+  if (redisClient) {
+    try {
+      const count = await redisClient.incr(key);
+      if (count === 1) await redisClient.pexpire(key, windowMs);
+      // Log to Redis list for audit
+      await redisClient.lpush(
+        `textmod:log:${userId}`,
+        JSON.stringify({
+          ts: Date.now(),
+          score: result.score,
+          categories: result.categories.map((c) => c.category),
+          action: result.action,
+          level: result.level,
+        })
+      );
+      await redisClient.ltrim(`textmod:log:${userId}`, 0, 49); // Keep last 50
+      await redisClient.pexpire(`textmod:log:${userId}`, 86400_000); // 24h TTL
+      return count;
+    } catch {
+      // fallback to in-memory
+    }
+  }
+
+  // In-memory fallback
+  const now = Date.now();
+  const entry = textViolations.get(userId);
+  if (!entry || now > entry.resetAt) {
+    textViolations.set(userId, { count: 1, resetAt: now + windowMs });
+    return 1;
+  }
+  entry.count++;
+  return entry.count;
+}
+
+/** Check if text moderation is enabled (reads from Redis, defaults to true) */
+let textModEnabledCache = true;
+let textModCacheExpiry = 0;
+async function isTextModerationEnabled(): Promise<boolean> {
+  const now = Date.now();
+  if (now < textModCacheExpiry) return textModEnabledCache;
+  if (redisClient) {
+    try {
+      const val = await redisClient.get("settings:textModerationEnabled");
+      textModEnabledCache = val !== "0"; // default true
+      textModCacheExpiry = now + 10_000; // cache 10s
+      return textModEnabledCache;
+    } catch {}
+  }
+  return true;
 }
 
 // ==================== МАТЧИНГ С SHADOW POOLS ====================
@@ -848,7 +912,7 @@ io.on("connection", (socket: Socket) => {
   });
 
   // ---- Текстовое сообщение ----
-  socket.on("send-message", (data: { sessionId: string; message: string }) => {
+  socket.on("send-message", async (data: { sessionId: string; message: string }) => {
     if (rateLimited("send-message")) return;
     const session = sessions.get(data.sessionId);
     if (!session) return;
@@ -860,6 +924,31 @@ io.on("connection", (socket: Socket) => {
     const message = sanitizeString(data.message, MAX_MESSAGE_LENGTH);
     if (message.length === 0) return;
 
+    // ---- Контекстная модерация текста ----
+    if (await isTextModerationEnabled()) {
+    const modResult = await moderateText(message);
+    if (modResult.action === "block") {
+      const userInfo = socketUsers.get(socket.id);
+      const userId = userInfo?.userId || "unknown";
+      const violationCount = await recordTextViolation(userId, modResult);
+      console.log(`[TextMod] BLOCKED message from ${userId} (violations: ${violationCount}, score: ${modResult.score.toFixed(2)}, categories: ${modResult.categories.map(c => c.category).join(",")})`);
+      socket.emit("message-blocked", {
+        reason: "content_violation",
+        categories: modResult.categories.map((c) => c.category),
+        violationCount,
+      });
+      // Auto-disconnect after 5 violations in 1 hour
+      if (violationCount >= 5) {
+        socket.emit("message-blocked", {
+          reason: "too_many_violations",
+          categories: [],
+          violationCount,
+        });
+        socket.disconnect(true);
+      }
+      return;
+    }
+
     const targetSocketId =
       socket.id === session.user1SocketId
         ? session.user2SocketId
@@ -867,10 +956,29 @@ io.on("connection", (socket: Socket) => {
 
     const userInfo = socketUsers.get(socket.id);
 
+    // Если warn — доставляем, но логируем
+    if (modResult.action === "warn") {
+      const userId = userInfo?.userId || "unknown";
+      await recordTextViolation(userId, modResult);
+      console.log(`[TextMod] WARN message from ${userId} (score: ${modResult.score.toFixed(2)}, categories: ${modResult.categories.map(c => c.category).join(",")})`);
+    }
+
     io.to(targetSocketId).emit("chat-message", {
       senderId: userInfo?.userId || "Unknown",
       message,
     });
+    } else {
+      // Text moderation disabled — deliver without check
+      const targetSocketId =
+        socket.id === session.user1SocketId
+          ? session.user2SocketId
+          : session.user1SocketId;
+      const userInfo = socketUsers.get(socket.id);
+      io.to(targetSocketId).emit("chat-message", {
+        senderId: userInfo?.userId || "Unknown",
+        message,
+      });
+    }
   });
 
   // ---- Завершение чата (с трекингом поведения) ----
@@ -1145,7 +1253,7 @@ io.on("connection", (socket: Socket) => {
   });
 
   // ---- Сообщение в группу ----
-  socket.on("group-message", (data: { roomId: string; message: string }) => {
+  socket.on("group-message", async (data: { roomId: string; message: string }) => {
     if (rateLimited("group-message")) return;
     const room = groupRooms.get(data.roomId);
     if (!room) return;
@@ -1156,11 +1264,46 @@ io.on("connection", (socket: Socket) => {
     const message = sanitizeString(data.message, MAX_MESSAGE_LENGTH);
     if (message.length === 0) return;
 
+    // ---- Контекстная модерация текста ----
+    if (await isTextModerationEnabled()) {
+    const modResult = await moderateText(message);
+    if (modResult.action === "block") {
+      const violationCount = await recordTextViolation(participant.userId, modResult);
+      console.log(`[TextMod] BLOCKED group message from ${participant.userId} (violations: ${violationCount}, score: ${modResult.score.toFixed(2)}, categories: ${modResult.categories.map(c => c.category).join(",")})`);
+      socket.emit("message-blocked", {
+        reason: "content_violation",
+        categories: modResult.categories.map((c) => c.category),
+        violationCount,
+      });
+      if (violationCount >= 5) {
+        socket.emit("message-blocked", {
+          reason: "too_many_violations",
+          categories: [],
+          violationCount,
+        });
+        socket.disconnect(true);
+      }
+      return;
+    }
+
+    if (modResult.action === "warn") {
+      await recordTextViolation(participant.userId, modResult);
+      console.log(`[TextMod] WARN group message from ${participant.userId} (score: ${modResult.score.toFixed(2)}, categories: ${modResult.categories.map(c => c.category).join(",")})`);
+    }
+
     socket.to(`group:${data.roomId}`).emit("group-chat-message", {
       senderId: participant.userId,
       senderName: participant.userName,
       message,
     });
+    } else {
+      // Text moderation disabled — deliver without check
+      socket.to(`group:${data.roomId}`).emit("group-chat-message", {
+        senderId: participant.userId,
+        senderName: participant.userName,
+        message,
+      });
+    }
   });
 
   // ---- Покинуть группу ----

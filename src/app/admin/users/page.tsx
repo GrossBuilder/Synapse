@@ -18,6 +18,9 @@ interface User {
   offenseCount?: number;
   banReason?: string;
   bannedAt?: number;
+  plan?: "free" | "plus" | "pro";
+  planExpiresAt?: number;
+  totalSpent?: number;
 }
 
 const REGION_VALUES = ["all", "global", "europe", "north-america", "south-america", "asia", "middle-east", "africa", "oceania", "cis"];
@@ -51,6 +54,11 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [banReason, setBanReason] = useState("");
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
+  const [subModalUser, setSubModalUser] = useState<User | null>(null);
+  const [subAction, setSubAction] = useState<"activate" | "extend" | "deactivate">("activate");
+  const [subPlan, setSubPlan] = useState<"PLUS" | "PRO">("PLUS");
+  const [subDays, setSubDays] = useState("30");
+  const [subLoading, setSubLoading] = useState(false);
   const [targetLang, setTargetLang] = useState<Lang>("en");
   const [translatedReason, setTranslatedReason] = useState("");
 
@@ -118,6 +126,28 @@ export default function UsersPage() {
     setActionLoading(null);
   }
 
+  async function handleSubAction() {
+    if (!subModalUser) return;
+    setSubLoading(true);
+    try {
+      const res = await fetch("/api/admin/subscription", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: subModalUser.id,
+          action: subAction,
+          plan: subPlan,
+          days: parseInt(subDays) || 30,
+        }),
+      });
+      if (res.ok) {
+        setSubModalUser(null);
+        await fetchUsers();
+      }
+    } catch { /* ignore */ }
+    setSubLoading(false);
+  }
+
   function handleTranslate() {
     if (!banReason.trim()) return;
     const result = translateText(banReason, "ru", targetLang);
@@ -173,17 +203,18 @@ export default function UsersPage() {
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{t("users.status")}</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{t("users.chats")}</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{t("users.reports")}</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{t("users.subscription")}</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{t("users.lastActive")}</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">{t("users.actions")}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12">
+                <tr><td colSpan={8} className="text-center py-12">
                   <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
                 </td></tr>
               ) : users.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-500 text-sm">{t("users.noUsersFound")}</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-gray-500 text-sm">{t("users.noUsersFound")}</td></tr>
               ) : (
                 users.map(user => (
                   <tr key={user.id} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
@@ -215,6 +246,34 @@ export default function UsersPage() {
                         }`}>
                           ×{user.offenseCount}
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.plan && user.plan !== "free" ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSubModalUser(user); setSubAction("extend"); }}
+                          className="group"
+                        >
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                            user.plan === "pro" ? "bg-purple-500/15 text-purple-400 border-purple-500/20" : "bg-indigo-500/15 text-indigo-400 border-indigo-500/20"
+                          } group-hover:opacity-80 transition-opacity`}>
+                            {user.plan.toUpperCase()}
+                          </span>
+                          {user.planExpiresAt && (
+                            <span className={`block text-[10px] mt-0.5 ${
+                              user.planExpiresAt < Date.now() ? "text-red-400" : "text-gray-500"
+                            }`}>
+                              {user.planExpiresAt < Date.now() ? t("users.subExpired") : timeAgo(Date.now() - (user.planExpiresAt - Date.now())).replace(/ago$/, "").trim()}
+                            </span>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSubModalUser(user); setSubAction("activate"); }}
+                          className="text-[11px] text-gray-600 hover:text-indigo-400 transition-colors"
+                        >
+                          Free
+                        </button>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{timeAgo(user.lastActive)}</td>
@@ -419,10 +478,113 @@ export default function UsersPage() {
               {selectedUser.banReason && (
                 <div className="flex justify-between"><span className="text-gray-400">{t("users.banReasonLabel")}</span><span className="text-red-400">{selectedUser.banReason}</span></div>
               )}
+              <div className="flex justify-between"><span className="text-gray-400">{t("users.subscription")}</span><span className={`font-medium ${selectedUser.plan === "pro" ? "text-purple-400" : selectedUser.plan === "plus" ? "text-indigo-400" : "text-gray-500"}`}>{(selectedUser.plan || "free").toUpperCase()}</span></div>
+              {selectedUser.planExpiresAt && (
+                <div className="flex justify-between"><span className="text-gray-400">{t("users.subExpiresAt")}</span><span className={selectedUser.planExpiresAt < Date.now() ? "text-red-400" : "text-white"}>{new Date(selectedUser.planExpiresAt).toLocaleDateString()}</span></div>
+              )}
+              {selectedUser.totalSpent !== undefined && selectedUser.totalSpent > 0 && (
+                <div className="flex justify-between"><span className="text-gray-400">{t("users.totalSpent")}</span><span className="text-emerald-400 font-medium">${selectedUser.totalSpent.toFixed(2)}</span></div>
+              )}
             </div>
             <button onClick={() => setSelectedUser(null)} className="w-full mt-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-xl transition-colors">
               {t("users.close")}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Management Modal */}
+      {subModalUser && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setSubModalUser(null)}>
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-white mb-1">{t("users.manageSub")}</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              <span className="text-white font-medium">{subModalUser.name}</span>{" "}
+              — {t("users.currentPlan")}: <span className={`font-medium ${subModalUser.plan === "pro" ? "text-purple-400" : subModalUser.plan === "plus" ? "text-indigo-400" : "text-gray-500"}`}>{(subModalUser.plan || "free").toUpperCase()}</span>
+              {subModalUser.planExpiresAt && subModalUser.plan !== "free" && (
+                <span className="text-gray-500 text-xs ml-2">
+                  ({subModalUser.planExpiresAt < Date.now() ? t("users.subExpired") : `${t("users.subExpiresAt")}: ${new Date(subModalUser.planExpiresAt).toLocaleDateString()}`})
+                </span>
+              )}
+            </p>
+
+            {/* Action selector */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setSubAction("activate")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${subAction === "activate" ? "bg-indigo-600/20 text-indigo-400 border-indigo-500/30" : "bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600"}`}
+              >
+                {t("users.subActivate")}
+              </button>
+              <button
+                onClick={() => setSubAction("extend")}
+                disabled={!subModalUser.plan || subModalUser.plan === "free"}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${subAction === "extend" ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/30" : "bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600"}`}
+              >
+                {t("users.subExtend")}
+              </button>
+              <button
+                onClick={() => setSubAction("deactivate")}
+                disabled={!subModalUser.plan || subModalUser.plan === "free"}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${subAction === "deactivate" ? "bg-red-600/20 text-red-400 border-red-500/30" : "bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600"}`}
+              >
+                {t("users.subDeactivate")}
+              </button>
+            </div>
+
+            {/* Action-specific fields */}
+            {subAction !== "deactivate" && (
+              <div className="space-y-3 mb-4">
+                {subAction === "activate" && (
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">{t("users.subPlan")}</label>
+                    <select
+                      value={subPlan}
+                      onChange={e => setSubPlan(e.target.value as "PLUS" | "PRO")}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="PLUS">PLUS ($4.99/mo)</option>
+                      <option value="PRO">PRO ($9.99/mo)</option>
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">{t("users.subDays")}</label>
+                  <input
+                    type="number"
+                    value={subDays}
+                    onChange={e => setSubDays(e.target.value)}
+                    min="1"
+                    max="365"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {subAction === "deactivate" && (
+              <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-4">
+                ⚠️ {t("users.subDeactivateWarning")}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setSubModalUser(null)}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                {t("users.cancel")}
+              </button>
+              <button
+                onClick={handleSubAction}
+                disabled={subLoading}
+                className={`px-4 py-2 text-sm text-white rounded-xl transition-colors disabled:opacity-50 ${
+                  subAction === "deactivate" ? "bg-red-600 hover:bg-red-500" : "bg-indigo-600 hover:bg-indigo-500"
+                }`}
+              >
+                {subLoading ? "..." : t(`users.subConfirm_${subAction}`)}
+              </button>
+            </div>
           </div>
         </div>
       )}

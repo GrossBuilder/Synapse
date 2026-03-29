@@ -228,7 +228,7 @@ export default function Home() {
                 <div className="text-center">
                   <div className="text-8xl mb-4">🔗</div>
                   <p className="text-xl font-semibold text-gray-300">
-                    Connecting minds
+                    {t("hero.connectingMinds")}
                   </p>
                 </div>
               </div>
@@ -238,6 +238,67 @@ export default function Home() {
               <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center animate-float">
                 <span className="text-2xl">🎵</span>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section className="py-24 px-6 bg-gray-900/30">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              {t("pricing.title")}
+            </h2>
+            <p className="text-gray-400 text-lg">{t("pricing.subtitle")}</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Free */}
+            <div className="p-8 bg-gray-900/80 border border-gray-800 rounded-2xl">
+              <h3 className="text-lg font-semibold mb-2">{t("pricing.free")}</h3>
+              <div className="text-4xl font-bold mb-6">{t("pricing.freePrice")}</div>
+              <ul className="space-y-3 text-sm text-gray-400 mb-8">
+                <li className="flex items-center gap-2"><span className="text-green-400">✓</span> {t("pricing.freeFeature1")}</li>
+                <li className="flex items-center gap-2"><span className="text-green-400">✓</span> {t("pricing.freeFeature2")}</li>
+                <li className="flex items-center gap-2"><span className="text-green-400">✓</span> {t("pricing.freeFeature3")}</li>
+              </ul>
+              <Link href="/lobby" className="block w-full py-3 text-center bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-semibold transition-colors">
+                {t("pricing.getStarted")}
+              </Link>
+            </div>
+
+            {/* Plus */}
+            <div className="p-8 bg-gradient-to-b from-indigo-900/30 to-gray-900/80 border-2 border-indigo-500/50 rounded-2xl relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full">
+                POPULAR
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Synapse+</h3>
+              <div className="text-4xl font-bold mb-1">$4.99<span className="text-lg font-normal text-gray-400">{t("pricing.perMonth")}</span></div>
+              <div className="text-xs text-gray-500 mb-6">$49.99/year</div>
+              <ul className="space-y-3 text-sm text-gray-400 mb-8">
+                <li className="flex items-center gap-2"><span className="text-indigo-400">✓</span> {t("pricing.plusFeature1")}</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-400">✓</span> {t("pricing.plusFeature2")}</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-400">✓</span> {t("pricing.plusFeature3")}</li>
+              </ul>
+              <Link href="/checkout?purpose=subscription&plan=plus&method=usdt" className="block w-full py-3 text-center bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition-colors">
+                {t("pricing.choosePlan")}
+              </Link>
+            </div>
+
+            {/* Pro */}
+            <div className="p-8 bg-gray-900/80 border border-gray-800 rounded-2xl">
+              <h3 className="text-lg font-semibold mb-2">Synapse Pro</h3>
+              <div className="text-4xl font-bold mb-1">$9.99<span className="text-lg font-normal text-gray-400">{t("pricing.perMonth")}</span></div>
+              <div className="text-xs text-gray-500 mb-6">$99.99/year</div>
+              <ul className="space-y-3 text-sm text-gray-400 mb-8">
+                <li className="flex items-center gap-2"><span className="text-purple-400">✓</span> {t("pricing.proFeature1")}</li>
+                <li className="flex items-center gap-2"><span className="text-purple-400">✓</span> {t("pricing.proFeature2")}</li>
+                <li className="flex items-center gap-2"><span className="text-purple-400">✓</span> {t("pricing.proFeature3")}</li>
+              </ul>
+              <Link href="/checkout?purpose=subscription&plan=pro&method=usdt" className="block w-full py-3 text-center bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-semibold transition-colors">
+                {t("pricing.choosePlan")}
+              </Link>
             </div>
           </div>
         </div>

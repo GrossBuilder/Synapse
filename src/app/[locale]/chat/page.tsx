@@ -191,6 +191,18 @@ function ChatContent() {
         setChatBlocked(true);
         setCurrentPlan(d.plan);
       }),
+      on("message-blocked", (data: unknown) => {
+        const d = data as { reason: string; categories: string[]; violationCount: number };
+        const systemMsg: ChatMessage = {
+          id: `blocked-${Date.now()}`,
+          senderId: "system",
+          message: d.reason === "too_many_violations"
+            ? t("chat.tooManyViolations")
+            : t("chat.messageBlocked"),
+          timestamp: Date.now(),
+        };
+        setChatMessages((prev) => [...prev, systemMsg]);
+      }),
       on("rapid-skip-warning", (data: unknown) => {
         const d = data as { skipsLeft: number };
         setSkipWarning(d.skipsLeft);

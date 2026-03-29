@@ -5,6 +5,7 @@
 
 import { prisma } from "./prisma";
 import type { Prisma } from "@prisma/client";
+import { redis } from "./redis";
 
 // ==================== INTERFACE TYPES ====================
 
@@ -62,8 +63,8 @@ export interface AdminSettings {
   maintenanceMode: boolean;
   maxConcurrentUsers: number;
   minAccountAgeMinutes: number;
-  blockedWords: string[];
   allowedRegions: string[];
+  textModerationEnabled: boolean;
   featureFlags: {
     videoChat: boolean;
     textChat: boolean;
@@ -91,6 +92,7 @@ export interface SystemMetrics {
   subscribersPlus: number;
   subscribersPro: number;
   totalRevenue: number;
+  supportOpen: number;
 }
 
 export interface ActivityLog {
@@ -202,8 +204,8 @@ class AdminStore {
       maintenanceMode: s.maintenanceMode,
       maxConcurrentUsers: s.maxConcurrentUsers,
       minAccountAgeMinutes: s.minAccountAgeMinutes,
-      blockedWords: s.blockedWords,
       allowedRegions: s.allowedRegions,
+      textModerationEnabled: s.textModerationEnabled,
       featureFlags: {
         videoChat: s.featureVideoChat,
         textChat: s.featureTextChat,
@@ -226,8 +228,8 @@ class AdminStore {
     if (typeof updates.maintenanceMode === "boolean") data.maintenanceMode = updates.maintenanceMode;
     if (typeof updates.maxConcurrentUsers === "number") data.maxConcurrentUsers = updates.maxConcurrentUsers;
     if (typeof updates.minAccountAgeMinutes === "number") data.minAccountAgeMinutes = updates.minAccountAgeMinutes;
-    if (Array.isArray(updates.blockedWords)) data.blockedWords = updates.blockedWords;
     if (Array.isArray(updates.allowedRegions)) data.allowedRegions = updates.allowedRegions;
+    if (typeof updates.textModerationEnabled === "boolean") data.textModerationEnabled = updates.textModerationEnabled;
     if (updates.featureFlags) {
       if (typeof updates.featureFlags.videoChat === "boolean") data.featureVideoChat = updates.featureFlags.videoChat;
       if (typeof updates.featureFlags.textChat === "boolean") data.featureTextChat = updates.featureFlags.textChat;
@@ -247,6 +249,11 @@ class AdminStore {
       data,
     });
 
+    // Sync text moderation flag to Redis for socket server
+    if (typeof updates.textModerationEnabled === "boolean") {
+      try { await redis.set("settings:textModerationEnabled", updates.textModerationEnabled ? "1" : "0"); } catch {}
+    }
+
     await this.addActivity("settings_changed", "Admin settings updated");
     return this.getSettings();
   }
@@ -263,7 +270,7 @@ class AdminStore {
       totalUsers, activeNow, bannedUsers,
       chatsToday, chatsTotal,
       reportsPending, reportsToday,
-      avgDuration, trustPools, subStats, totalRevenue,
+      avgDuration, trustPools, subStats, totalRevenue, supportOpen,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { lastActive: { gte: fiveMinAgo } } }),
@@ -276,6 +283,7 @@ class AdminStore {
       prisma.trustScore.groupBy({ by: ["pool"], _count: true }),
       prisma.subscription.groupBy({ by: ["plan"], _count: true }),
       prisma.payment.aggregate({ where: { status: "COMPLETED" }, _sum: { amount: true } }),
+      prisma.supportTicket.count({ where: { status: "OPEN" } }),
     ]);
 
     const poolMap: Record<string, number> = {};
@@ -303,6 +311,7 @@ class AdminStore {
       subscribersPlus: subMap["PLUS"] || 0,
       subscribersPro: subMap["PRO"] || 0,
       totalRevenue: Math.round((totalRevenue._sum?.amount || 0) * 100) / 100,
+      supportOpen,
     };
   }
 
@@ -481,12 +490,10 @@ class AdminStore {
 
   async createReport(data: {
     reporterId: string; reportedId: string; reason: string; description: string; reporterLocale?: string;
-  }): Promise<{ report: AdminReport; blockedWords: string[]; remaining: number; autoAction?: string } | null> {
+  }): Promise<{ report: AdminReport; remaining: number; autoAction?: string } | null> {
     const settings = await this.getSettings();
     const { allowed, remaining } = await this.canUserReport(data.reporterId);
     if (!allowed) return null;
-
-    const { filtered, blocked } = this.filterBlockedWords(data.description, settings.blockedWords);
     const reasonKey = data.reason as keyof typeof REASON_TO_DB;
     const severity = data.reason === "underage" ? "CRITICAL" : data.reason === "harassment" ? "HIGH" : data.reason === "spam" ? "LOW" : "MEDIUM";
 
@@ -494,7 +501,7 @@ class AdminStore {
       data: {
         reporterId: data.reporterId, reportedId: data.reportedId,
         reason: (REASON_TO_DB[reasonKey] || "OTHER") as "SPAM" | "HARASSMENT" | "INAPPROPRIATE" | "UNDERAGE" | "SCAM" | "OTHER",
-        details: filtered,
+        details: data.description,
         severity: severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
         reporterLocale: data.reporterLocale || "en",
       },
@@ -541,7 +548,7 @@ class AdminStore {
       }
     }
 
-    return { report: mapReport(report), blockedWords: blocked, remaining: remaining - 1, autoAction };
+    return { report: mapReport(report), remaining: remaining - 1, autoAction };
   }
 
   /**
@@ -659,19 +666,6 @@ class AdminStore {
       where: { reporterId, createdAt: { gte: todayStart } },
     });
     return { allowed: todayReports < settings.maxReportsPerDay, remaining: Math.max(0, settings.maxReportsPerDay - todayReports) };
-  }
-
-  filterBlockedWords(text: string, blockedWords: string[]): { filtered: string; blocked: string[] } {
-    const blocked: string[] = [];
-    let filtered = text;
-    for (const word of blockedWords) {
-      const regex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
-      if (regex.test(filtered)) {
-        blocked.push(word);
-        filtered = filtered.replace(regex, "***");
-      }
-    }
-    return { filtered, blocked };
   }
 
   async autoResolveOldReports(): Promise<number> {

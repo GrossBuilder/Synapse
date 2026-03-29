@@ -17,6 +17,8 @@ REDIS_PASSWORD="$(openssl rand -hex 16)"
 NEXTAUTH_SECRET="$(openssl rand -base64 32)"
 CRON_SECRET="$(openssl rand -hex 16)"
 ADMIN_PASSWORD="$(openssl rand -base64 16)"
+USDT_WALLET=""                      # Твой USDT TRC-20 кошелёк
+TRONGRID_KEY=""                     # TronGrid API key (опционально)
 
 # ==================== 1. СИСТЕМНЫЕ ПАКЕТЫ ====================
 echo ">>> [1/7] Обновление системы и установка Docker..."
@@ -73,10 +75,10 @@ ADMIN_EMAIL="${EMAIL}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 
 # Payments
-USDT_WALLET_ADDRESS="TGj7KqGVtqJrPSPzBrtMpX41QaNdqTBk4U"
+USDT_WALLET_ADDRESS="${USDT_WALLET}"
 CRON_SECRET="${CRON_SECRET}"
 TRONGRID_API_URL="https://api.trongrid.io"
-TRONGRID_API_KEY="baf1c43e-e95a-4ae9-a85d-91e894892fdf"
+TRONGRID_API_KEY="${TRONGRID_KEY}"
 
 # URLs
 NEXT_PUBLIC_SOCKET_URL="https://${DOMAIN}"

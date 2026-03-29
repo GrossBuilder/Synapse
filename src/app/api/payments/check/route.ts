@@ -89,8 +89,8 @@ async function activatePayment(payment: CryptoPayment): Promise<void> {
 
   switch (purpose.type) {
     case "subscription": {
-      await activateSubscription(userId, purpose.plan, payment.id);
-      console.log(`[Activate] Подписка ${purpose.plan} активирована для ${userId}`);
+      await activateSubscription(userId, purpose.plan, payment.id, purpose.billing || "monthly");
+      console.log(`[Activate] Подписка ${purpose.plan} (${purpose.billing || "monthly"}) активирована для ${userId}`);
       break;
     }
     case "boost": {

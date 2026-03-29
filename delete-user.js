@@ -1,3 +1,4 @@
+// Usage: node delete-user.js <email>
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient({
@@ -5,9 +6,14 @@ const p = new PrismaClient({
 });
 
 async function main() {
-  const u = await p.user.findUnique({ where: { email: 'calipgross@gmail.com' } });
+  const email = process.argv[2];
+  if (!email) {
+    console.error('Usage: node delete-user.js <email>');
+    process.exit(1);
+  }
+  const u = await p.user.findUnique({ where: { email } });
   if (!u) {
-    console.log('User not found');
+    console.log('User not found:', email);
     return;
   }
   await p.session.deleteMany({ where: { userId: u.id } });

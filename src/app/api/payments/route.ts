@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
       if (!plan || !VALID_PLANS.includes(plan)) {
         return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
       }
-      purpose = { type: "subscription", plan };
+      const billing = body.billing === "yearly" ? "yearly" as const : "monthly" as const;
+      purpose = { type: "subscription", plan, billing };
       break;
     }
     case "boost": {

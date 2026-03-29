@@ -9,7 +9,8 @@
  */
 
 import type { SubscriptionPlan, BoostType } from "@/types";
-import { PRICING, BOOST_PRICING, VERIFIED_BADGE_PRICE } from "./subscription";
+import { PRICING, YEARLY_PRICING, BOOST_PRICING, VERIFIED_BADGE_PRICE } from "./subscription";
+import type { BillingPeriod } from "./subscription";
 
 // ==================== КОНФИГУРАЦИЯ ====================
 
@@ -37,7 +38,7 @@ export const USDT_DECIMALS = 6;
 // ==================== ТИПЫ ====================
 
 export type PaymentPurpose =
-  | { type: "subscription"; plan: SubscriptionPlan }
+  | { type: "subscription"; plan: SubscriptionPlan; billing?: BillingPeriod }
   | { type: "boost"; boostType: BoostType }
   | { type: "verified_badge" };
 
@@ -87,8 +88,10 @@ async function generateUniqueMicro(): Promise<number> {
  */
 export function getBasePrice(purpose: PaymentPurpose): number {
   switch (purpose.type) {
-    case "subscription":
-      return PRICING[purpose.plan];
+    case "subscription": {
+      const pricing = purpose.billing === "yearly" ? YEARLY_PRICING : PRICING;
+      return pricing[purpose.plan];
+    }
     case "boost":
       return BOOST_PRICING[purpose.boostType].price;
     case "verified_badge":
@@ -101,8 +104,11 @@ export function getBasePrice(purpose: PaymentPurpose): number {
  */
 export function getPurposeLabel(purpose: PaymentPurpose): string {
   switch (purpose.type) {
-    case "subscription":
-      return `Synapse ${purpose.plan === "plus" ? "Plus" : "Pro"} — 1 month`;
+    case "subscription": {
+      const name = purpose.plan === "plus" ? "Plus" : "Pro";
+      const period = purpose.billing === "yearly" ? "1 year" : "1 month";
+      return `Synapse ${name} — ${period}`;
+    }
     case "boost":
       return BOOST_PRICING[purpose.boostType].label;
     case "verified_badge":
@@ -160,6 +166,7 @@ export async function createPayment(
 
   await redis.set(REDIS_KEYS.PAYMENT(id), JSON.stringify(payment), "EX", REDIS_PAYMENT_TTL);
   await redis.sadd(REDIS_KEYS.USER_PAYMENTS(userId), id);
+  await redis.sadd(REDIS_KEYS.PENDING_PAYMENTS, id);
 
   return payment;
 }
@@ -207,17 +214,29 @@ interface TronTRC20Transfer {
  * Получить все pending-платежи из Redis.
  */
 async function getAllPendingPayments(): Promise<CryptoPayment[]> {
-  const keys = await redis.keys("payment:pay_*");
-  if (keys.length === 0) return [];
+  const ids = await redis.smembers(REDIS_KEYS.PENDING_PAYMENTS);
+  if (ids.length === 0) return [];
 
+  const keys = ids.map((id) => REDIS_KEYS.PAYMENT(id));
   const values = await redis.mget(...keys);
   const payments: CryptoPayment[] = [];
-  for (const raw of values) {
+  const staleIds: string[] = [];
+
+  for (let i = 0; i < values.length; i++) {
+    const raw = values[i];
     if (raw) {
       const p = JSON.parse(raw) as CryptoPayment;
       if (p.status === "pending") payments.push(p);
+    } else {
+      // Key expired from Redis — remove from set
+      staleIds.push(ids[i]);
     }
   }
+
+  if (staleIds.length > 0) {
+    await redis.srem(REDIS_KEYS.PENDING_PAYMENTS, ...staleIds);
+  }
+
   return payments;
 }
 
@@ -241,6 +260,7 @@ export async function checkPendingPayments(): Promise<{
       expired.push(payment);
       await redis.del(REDIS_KEYS.PAYMENT(payment.id));
       await redis.srem(REDIS_KEYS.USER_PAYMENTS(payment.userId), payment.id);
+      await redis.srem(REDIS_KEYS.PENDING_PAYMENTS, payment.id);
     }
   }
 
@@ -252,9 +272,9 @@ export async function checkPendingPayments(): Promise<{
   const transfers = await fetchRecentTransfers();
 
   for (const tx of transfers) {
-    // Пропускаем уже обработанные (проверяем в Redis)
-    const alreadyProcessed = await redis.exists(REDIS_KEYS.COMPLETED_TX(tx.transaction_id));
-    if (alreadyProcessed) continue;
+    // Атомарная проверка + блокировка TX ID (SET NX предотвращает race condition)
+    const locked = await redis.set(REDIS_KEYS.COMPLETED_TX(tx.transaction_id), "processing", "EX", REDIS_TX_TTL, "NX");
+    if (!locked) continue; // уже обработана или обрабатывается
 
     // Контракт совпадает?
     if (tx.token_info.address !== USDT_CONTRACT) continue;
@@ -275,11 +295,12 @@ export async function checkPendingPayments(): Promise<{
         payment.receivedAmount = receivedAmount;
         payment.completedAt = Date.now();
 
-        // Сохраняем TX ID для replay protection
-        await redis.set(REDIS_KEYS.COMPLETED_TX(tx.transaction_id), "1", "EX", REDIS_TX_TTL);
+        // Обновляем TX статус на completed (ключ уже создан через SET NX выше)
+        await redis.set(REDIS_KEYS.COMPLETED_TX(tx.transaction_id), "completed", "EX", REDIS_TX_TTL);
         // Удаляем из pending
         await redis.del(REDIS_KEYS.PAYMENT(payment.id));
         await redis.srem(REDIS_KEYS.USER_PAYMENTS(payment.userId), payment.id);
+        await redis.srem(REDIS_KEYS.PENDING_PAYMENTS, payment.id);
 
         confirmed.push(payment);
 

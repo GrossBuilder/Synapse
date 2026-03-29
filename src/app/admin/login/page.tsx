@@ -83,7 +83,7 @@ export default function AdminLoginPage() {
               onChange={e => setEmail(e.target.value)}
               required
               className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="admin@synapse.app"
+              placeholder="email@example.com"
             />
           </div>
 
@@ -94,6 +94,7 @@ export default function AdminLoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
+              autoComplete="new-password"
               className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               placeholder="••••••••"
             />

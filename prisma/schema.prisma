@@ -87,6 +87,7 @@ model User {
   boosts        Boost[]
   payments      Payment[]
   moderationLogs ContentModerationLog[]
+  supportTickets SupportTicket[]
 
   @@index([status])
   @@index([region])
@@ -361,15 +362,21 @@ model Payment {
   amount      Float         // USD
   currency    String        @default("USD")
   type        PaymentType
+  method      String        @default("unknown") // USDT_TRC20 | LEMONSQUEEZY | STRIPE
+  plan        String?       // plus | pro (для подписок)
+  billing     String?       // monthly | yearly
   itemId      String?       // ID подписки или буста
   status      PaymentStatus @default(PENDING)
-  externalId  String?       // ID в платёжной системе
+  externalId  String?       // TX hash (USDT) или ID заказа (LemonSqueezy)
+  failReason  String?       // Причина ошибки / подробности
+  ipAddress   String?       // IP пользователя при оплате
   createdAt   DateTime      @default(now())
 
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([status])
+  @@index([externalId])
 }
 
 enum SubscriptionPlan {
@@ -419,12 +426,12 @@ model AdminSettings {
   maintenanceMode          Boolean  @default(false)
   maxConcurrentUsers       Int      @default(1000)
   minAccountAgeMinutes     Int      @default(0)
-  blockedWords             String[] @default(["spam", "scam", "phishing"])
   allowedRegions           String[] @default(["global", "europe", "north-america", "south-america", "asia", "middle-east", "africa", "oceania", "cis"])
   featureVideoChat         Boolean  @default(true)
   featureTextChat          Boolean  @default(true)
   featureFileSharing       Boolean  @default(false)
   featureScreenShare       Boolean  @default(false)
+  textModerationEnabled    Boolean  @default(true)
   updatedAt                DateTime @updatedAt
 }
 
@@ -455,4 +462,33 @@ model ContentModerationLog {
 
   @@index([userId, createdAt])
   @@index([type])
+}
+
+// ==================== ПОДДЕРЖКА ====================
+
+model SupportTicket {
+  id          String              @id @default(cuid())
+  userId      String
+  email       String
+  subject     String
+  message     String              @db.Text
+  locale      String              @default("en")
+  status      SupportTicketStatus @default(OPEN)
+  adminReply  String?             @db.Text
+  repliedAt   DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+enum SupportTicketStatus {
+  OPEN
+  REPLIED
+  CLOSED
 }

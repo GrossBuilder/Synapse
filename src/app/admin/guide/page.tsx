@@ -75,6 +75,7 @@ export default function GuidePage() {
     { id: "analytics", key: "guide.analytics.title" },
     { id: "settings", key: "guide.settings.title" },
     { id: "payments", key: "guide.payments.title" },
+    { id: "trust", key: "guide.trust.title" },
     { id: "faq", key: "guide.faq.title" },
   ];
 
@@ -133,6 +134,16 @@ export default function GuidePage() {
           "guide.users.unban",
         ]} />
         <P textKey="guide.users.details" />
+        <SubTitle textKey="guide.users.subscription" />
+        <P textKey="guide.users.subscriptionDesc" />
+        <BulletList items={[
+          "guide.users.subActivate",
+          "guide.users.subExtend",
+          "guide.users.subDeactivate",
+        ]} />
+        <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-xl p-4 mt-2">
+          <p className="text-sm text-indigo-300">{t("guide.users.subNote")}</p>
+        </div>
       </Section>
 
       {/* 3. Reports */}
@@ -182,8 +193,8 @@ export default function GuidePage() {
         <P textKey="guide.settings.securityDesc" />
         <SubTitle textKey="guide.settings.features" />
         <P textKey="guide.settings.featuresDesc" />
-        <SubTitle textKey="guide.settings.words" />
-        <P textKey="guide.settings.wordsDesc" />
+        <SubTitle textKey="guide.settings.aimod" />
+        <P textKey="guide.settings.aimodDesc" />
         <SubTitle textKey="guide.settings.regions" />
         <P textKey="guide.settings.regionsDesc" />
       </Section>
@@ -199,14 +210,57 @@ export default function GuidePage() {
           "guide.payments.howStep4",
           "guide.payments.howStep5",
         ]} />
+        <SubTitle textKey="guide.payments.dashboard" />
+        <P textKey="guide.payments.dashboardDesc" />
+        <BulletList items={[
+          "guide.payments.dashRevenue",
+          "guide.payments.dashCompleted",
+          "guide.payments.dashPending",
+          "guide.payments.dashFailed",
+          "guide.payments.dashRefunded",
+          "guide.payments.dashChart",
+          "guide.payments.dashFilters",
+        ]} />
+        <P textKey="guide.payments.dashDetails" />
+        <SubTitle textKey="guide.payments.audit" />
+        <P textKey="guide.payments.auditDesc" />
+        <SubTitle textKey="guide.payments.subs" />
+        <P textKey="guide.payments.subsDesc" />
         <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-xl p-4 mt-2">
           <p className="text-sm text-indigo-300">{t("guide.payments.wallet")}</p>
         </div>
+        <SubTitle textKey="guide.payments.lemon" />
+        <P textKey="guide.payments.lemonDesc" />
         <SubTitle textKey="guide.payments.troubleshoot" />
         <P textKey="guide.payments.troubleshootDesc" />
       </Section>
 
-      {/* 7. FAQ */}
+      {/* 7. Trust Score & Safety */}
+      <Section id="trust" titleKey="guide.trust.title">
+        <P textKey="guide.trust.desc" />
+        <SubTitle textKey="guide.trust.howTitle" />
+        <P textKey="guide.trust.howDesc" />
+        <SubTitle textKey="guide.trust.positive" />
+        <BulletList items={[
+          "guide.trust.positiveItem1",
+          "guide.trust.positiveItem2",
+          "guide.trust.positiveItem3",
+          "guide.trust.positiveItem4",
+        ]} />
+        <SubTitle textKey="guide.trust.negative" />
+        <BulletList items={[
+          "guide.trust.negativeItem1",
+          "guide.trust.negativeItem2",
+          "guide.trust.negativeItem3",
+          "guide.trust.negativeItem4",
+        ]} />
+        <SubTitle textKey="guide.trust.pools" />
+        <P textKey="guide.trust.poolsDesc" />
+        <SubTitle textKey="guide.trust.badges" />
+        <P textKey="guide.trust.badgesDesc" />
+      </Section>
+
+      {/* 8. FAQ */}
       <Section id="faq" titleKey="guide.faq.title">
         <div className="space-y-3">
           <FaqItem qKey="guide.faq.q1" aKey="guide.faq.a1" />
@@ -215,6 +269,8 @@ export default function GuidePage() {
           <FaqItem qKey="guide.faq.q4" aKey="guide.faq.a4" />
           <FaqItem qKey="guide.faq.q5" aKey="guide.faq.a5" />
           <FaqItem qKey="guide.faq.q6" aKey="guide.faq.a6" />
+          <FaqItem qKey="guide.faq.q7" aKey="guide.faq.a7" />
+          <FaqItem qKey="guide.faq.q8" aKey="guide.faq.a8" />
         </div>
       </Section>
     </div>

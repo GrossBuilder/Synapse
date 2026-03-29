@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAdminI18n } from "@/lib/admin-i18n";
 
 interface Settings {
@@ -15,8 +15,8 @@ interface Settings {
   maintenanceMode: boolean;
   maxConcurrentUsers: number;
   minAccountAgeMinutes: number;
-  blockedWords: string[];
   allowedRegions: string[];
+  textModerationEnabled: boolean;
   featureFlags: {
     videoChat: boolean;
     textChat: boolean;
@@ -25,25 +25,18 @@ interface Settings {
   };
 }
 
-const ALL_REGIONS = [
-  { id: "global", label: "🌍 Global" },
-  { id: "europe", label: "🇪🇺 Europe" },
-  { id: "north-america", label: "🌎 N. America" },
-  { id: "south-america", label: "🌎 S. America" },
-  { id: "asia", label: "🌏 Asia" },
-  { id: "middle-east", label: "🕌 Middle East" },
-  { id: "africa", label: "🌍 Africa" },
-  { id: "oceania", label: "🏝️ Oceania" },
-  { id: "cis", label: "🏛️ CIS" },
+const REGION_IDS = [
+  "global", "europe", "north-america", "south-america",
+  "asia", "middle-east", "africa", "oceania", "cis",
 ];
 
 export default function SettingsPage() {
   const { t } = useAdminI18n();
+  const ALL_REGIONS = REGION_IDS.map(id => ({ id, label: t(`region.${id}`) }));
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [newWord, setNewWord] = useState("");
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -57,15 +50,23 @@ export default function SettingsPage() {
     fetchSettings();
   }, [fetchSettings]);
 
-  async function saveSettings(partial?: Partial<Settings>) {
-    if (!settings) return;
+  const saveRef = useRef<AbortController | null>(null);
+
+  async function saveSettings(data?: Partial<Settings>) {
+    const payload = data || settings;
+    if (!payload) return;
+    // Cancel previous in-flight save
+    saveRef.current?.abort();
+    const controller = new AbortController();
+    saveRef.current = controller;
     setSaving(true);
     setSaved(false);
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(partial || settings),
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       if (res.ok) {
         const updated = await res.json();
@@ -73,8 +74,8 @@ export default function SettingsPage() {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       }
-    } catch { /* ignore */ }
-    setSaving(false);
+    } catch { /* ignore aborted */ }
+    if (!controller.signal.aborted) setSaving(false);
   }
 
   function updateLocal<K extends keyof Settings>(key: K, value: Settings[K]) {
@@ -82,16 +83,11 @@ export default function SettingsPage() {
     setSettings({ ...settings, [key]: value });
   }
 
-  function addBlockedWord() {
-    if (!newWord.trim() || !settings) return;
-    const words = [...settings.blockedWords, newWord.trim().toLowerCase()];
-    setSettings({ ...settings, blockedWords: words });
-    setNewWord("");
-  }
-
-  function removeBlockedWord(word: string) {
+  function updateAndSave<K extends keyof Settings>(key: K, value: Settings[K]) {
     if (!settings) return;
-    setSettings({ ...settings, blockedWords: settings.blockedWords.filter(w => w !== word) });
+    const updated = { ...settings, [key]: value };
+    setSettings(updated);
+    saveSettings(updated);
   }
 
   function toggleRegion(regionId: string) {
@@ -99,15 +95,19 @@ export default function SettingsPage() {
     const regions = settings.allowedRegions.includes(regionId)
       ? settings.allowedRegions.filter(r => r !== regionId)
       : [...settings.allowedRegions, regionId];
-    setSettings({ ...settings, allowedRegions: regions });
+    const updated = { ...settings, allowedRegions: regions };
+    setSettings(updated);
+    saveSettings(updated);
   }
 
   function toggleFeature(key: keyof Settings["featureFlags"]) {
     if (!settings) return;
-    setSettings({
+    const updated = {
       ...settings,
       featureFlags: { ...settings.featureFlags, [key]: !settings.featureFlags[key] },
-    });
+    };
+    setSettings(updated);
+    saveSettings(updated);
   }
 
   if (loading) {
@@ -158,7 +158,7 @@ export default function SettingsPage() {
           label={t("settings.enableAutoMod")}
           description={t("settings.enableAutoModDesc")}
           checked={settings.autoModeration}
-          onChange={v => updateLocal("autoModeration", v)}
+          onChange={v => updateAndSave("autoModeration", v)}
         />
         <NumberInput
           label={t("settings.autoWarnThreshold")}
@@ -196,7 +196,13 @@ export default function SettingsPage() {
           label={t("settings.repeatOffender")}
           description={t("settings.repeatOffenderDesc")}
           checked={settings.repeatOffenderMultiplier}
-          onChange={v => updateLocal("repeatOffenderMultiplier", v)}
+          onChange={v => updateAndSave("repeatOffenderMultiplier", v)}
+        />
+        <Toggle
+          label={t("settings.textModeration")}
+          description={t("settings.textModerationDesc")}
+          checked={settings.textModerationEnabled}
+          onChange={v => updateAndSave("textModerationEnabled", v)}
         />
       </Section>
 
@@ -234,13 +240,13 @@ export default function SettingsPage() {
           label={t("settings.emailVerification")}
           description={t("settings.emailVerificationDesc")}
           checked={settings.requireEmailVerification}
-          onChange={v => updateLocal("requireEmailVerification", v)}
+          onChange={v => updateAndSave("requireEmailVerification", v)}
         />
         <Toggle
           label={t("settings.maintenanceMode")}
           description={t("settings.maintenanceModeDesc")}
           checked={settings.maintenanceMode}
-          onChange={v => updateLocal("maintenanceMode", v)}
+          onChange={v => updateAndSave("maintenanceMode", v)}
           danger
         />
       </Section>
@@ -270,39 +276,6 @@ export default function SettingsPage() {
               </button>
             );
           })}
-        </div>
-      </Section>
-
-      {/* Blocked Words */}
-      <Section title={t("settings.blockedWords")} description={t("settings.blockedWordsDesc")}>
-        <div className="flex gap-2 mb-3">
-          <input
-            value={newWord}
-            onChange={e => setNewWord(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && addBlockedWord()}
-            placeholder={t("settings.addWord")}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-          />
-          <button
-            onClick={addBlockedWord}
-            className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors"
-          >
-            {t("settings.add")}
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {settings.blockedWords.map(word => (
-            <span
-              key={word}
-              className="inline-flex items-center gap-1 bg-red-900/20 text-red-400 border border-red-500/20 px-3 py-1 rounded-lg text-xs"
-            >
-              {word}
-              <button onClick={() => removeBlockedWord(word)} className="hover:text-white ml-1">×</button>
-            </span>
-          ))}
-          {settings.blockedWords.length === 0 && (
-            <p className="text-xs text-gray-500">{t("settings.noBlockedWords")}</p>
-          )}
         </div>
       </Section>
 

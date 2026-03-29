@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
@@ -8,19 +8,21 @@ import Navbar from "@/components/Navbar";
 import TrustBadge from "@/components/TrustBadge";
 import SubscriptionBadge from "@/components/SubscriptionBadge";
 import { Button } from "@/components/ui";
-import { CATEGORIES } from "@/lib/categories";
-import { REGIONS } from "@/lib/regions";
 import type { SubscriptionPlan, TrustBadge as TrustBadgeType } from "@/types";
 
 type ExperienceLevel = "BEGINNER" | "INTERMEDIATE" | "EXPERT";
 
-interface ProfileData {
-  bio: string;
-  experienceLevel: ExperienceLevel;
-  interests: string[];
-  tags: string[];
-  preferredRegion: string;
-}
+const THEMES = [
+  { id: "default",   name: "Midnight",    bg: "#030712", accent: "#6366f1", preview: "linear-gradient(135deg, #030712, #1e1b4b)" },
+  { id: "aurora",    name: "Aurora",      bg: "#0a1628", accent: "#22d3ee", preview: "linear-gradient(135deg, #0a1628, #164e63)" },
+  { id: "ember",     name: "Ember",       bg: "#1a0a0a", accent: "#f97316", preview: "linear-gradient(135deg, #1a0a0a, #7c2d12)" },
+  { id: "forest",    name: "Forest",      bg: "#071209", accent: "#22c55e", preview: "linear-gradient(135deg, #071209, #14532d)" },
+  { id: "sakura",    name: "Sakura",      bg: "#1a0a1a", accent: "#e879f9", preview: "linear-gradient(135deg, #1a0a1a, #701a75)" },
+  { id: "ocean",     name: "Ocean",       bg: "#020c1b", accent: "#3b82f6", preview: "linear-gradient(135deg, #020c1b, #1e3a5f)" },
+  { id: "sandstorm", name: "Sandstorm",   bg: "#1a1408", accent: "#eab308", preview: "linear-gradient(135deg, #1a1408, #713f12)" },
+] as const;
+
+type ThemeId = (typeof THEMES)[number]["id"];
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
@@ -32,19 +34,26 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [bio, setBio] = useState("");
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>("BEGINNER");
-  const [interests, setInterests] = useState<string[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
-  const [preferredRegion, setPreferredRegion] = useState("global");
+  const [selectedTheme, setSelectedTheme] = useState<ThemeId>("default");
   const [plan, setPlan] = useState<SubscriptionPlan>("free");
   const [badge, setBadge] = useState<TrustBadgeType>("regular");
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/signin");
     }
   }, [status, router]);
+
+  // Load saved theme from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("synapse-theme");
+    if (saved && THEMES.some((t) => t.id === saved)) {
+      setSelectedTheme(saved as ThemeId);
+    }
+  }, []);
 
   // Загрузка профиля
   useEffect(() => {
@@ -57,14 +66,26 @@ export default function ProfilePage() {
       .then(([profileData, subData]) => {
         setBio(profileData.bio || "");
         setExperienceLevel(profileData.experienceLevel || "BEGINNER");
-        setInterests(profileData.interests || []);
-        setTags(profileData.tags || []);
-        setPreferredRegion(profileData.preferredRegion || "global");
+        if (profileData.image) setAvatarUrl(profileData.image);
         if (subData.plan) setPlan(subData.plan);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [session]);
+
+  const applyTheme = (themeId: ThemeId) => {
+    const theme = THEMES.find((t) => t.id === themeId);
+    if (!theme) return;
+    document.documentElement.style.setProperty("--background", theme.bg);
+    document.documentElement.style.setProperty("--accent", theme.accent);
+    document.body.style.background = theme.bg;
+  };
+
+  const handleThemeSelect = (themeId: ThemeId) => {
+    setSelectedTheme(themeId);
+    localStorage.setItem("synapse-theme", themeId);
+    applyTheme(themeId);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -76,9 +97,6 @@ export default function ProfilePage() {
         body: JSON.stringify({
           bio,
           experienceLevel,
-          interests,
-          tags,
-          preferredRegion,
         }),
       });
       if (res.ok) {
@@ -92,27 +110,31 @@ export default function ProfilePage() {
     }
   };
 
-  const toggleInterest = (slug: string) => {
-    setInterests((prev) =>
-      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
-    );
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await fetch("/api/profile/avatar", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.image) {
+        setAvatarUrl(`${data.image}?t=${Date.now()}`);
+      }
+    } catch { /* silent */ } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
-  const addTag = () => {
-    const trimmed = tagInput.trim();
-    if (!trimmed || tags.includes(trimmed) || tags.length >= 10) return;
-    setTags((prev) => [...prev, trimmed]);
-    setTagInput("");
-  };
-
-  const removeTag = (tag: string) => {
-    setTags((prev) => prev.filter((t) => t !== tag));
-  };
-
-  const handleTagKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addTag();
+  const handleAvatarRemove = async () => {
+    setUploadingAvatar(true);
+    try {
+      const res = await fetch("/api/profile/avatar", { method: "DELETE" });
+      if (res.ok) setAvatarUrl(null);
+    } catch { /* silent */ } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -132,6 +154,17 @@ export default function ProfilePage() {
       <Navbar />
 
       <div className="max-w-2xl mx-auto px-4 pt-24 pb-16">
+        {/* Back button */}
+        <button
+          onClick={() => router.push("/lobby")}
+          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-6"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          {t("common.back")}
+        </button>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -147,12 +180,65 @@ export default function ProfilePage() {
         {/* User info card */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white">
-              {session?.user?.name?.charAt(0).toUpperCase()}
+            <div className="relative group">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Avatar"
+                  className="w-16 h-16 rounded-full object-cover ring-2 ring-gray-700"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white">
+                  {session?.user?.name?.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                {uploadingAvatar ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                  </svg>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleAvatarUpload}
+                className="hidden"
+                aria-label="Upload avatar"
+              />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">{session?.user?.name}</h2>
-              <p className="text-sm text-gray-400">{session?.user?.email}</p>
+              <p className="text-sm text-gray-400 mb-1">{session?.user?.email}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  {t("profile.changeAvatar")}
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleAvatarRemove}
+                    disabled={uploadingAvatar}
+                    className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                  >
+                    {t("profile.removeAvatar")}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -173,7 +259,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Experience Level */}
-          <div className="mb-5">
+          <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               {t("profile.experience")}
             </label>
@@ -195,132 +281,53 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
-
-          {/* Preferred Region */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              {t("profile.preferredRegion")}
-            </label>
-            <select
-              value={preferredRegion}
-              onChange={(e) => setPreferredRegion(e.target.value)}
-              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-            >
-              {REGIONS.map((region) => (
-                <option key={region.id} value={region.slug}>
-                  {region.icon} {t(`regions.${region.slug}`)}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
-        {/* Tags */}
-        <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-3">
-            {t("profile.tags")}
-          </label>
-          <p className="text-xs text-gray-500 mb-3">{t("profile.tagsHint")}</p>
-
-          <div className="flex flex-wrap gap-2 mb-3">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 text-indigo-300 rounded-full text-sm ring-1 ring-indigo-500/30"
-              >
-                {tag}
-                <button
-                  onClick={() => removeTag(tag)}
-                  className="hover:text-white transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleTagKeyDown}
-              placeholder={t("profile.addTag")}
-              maxLength={30}
-              className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-            />
-            <Button onClick={addTag} variant="secondary" size="sm" disabled={!tagInput.trim() || tags.length >= 10}>
-              +
-            </Button>
-          </div>
-        </div>
-
-        {/* Interests */}
+        {/* Theme Selection */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-1">
-            {t("profile.interests")}
+            {t("profile.theme")}
           </label>
-          <p className="text-xs text-gray-500 mb-4">
-            {t("profile.interestsHint")} ({interests.length}/20)
-          </p>
+          <p className="text-xs text-gray-500 mb-4">{t("profile.themeHint")}</p>
 
-          <div className="space-y-2">
-            {CATEGORIES.map((cat) => (
-              <div key={cat.id} className="border border-gray-800 rounded-xl overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {THEMES.map((theme) => {
+              const isSelected = selectedTheme === theme.id;
+              return (
                 <button
-                  onClick={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-800/30 hover:bg-gray-800/60 transition-colors"
+                  key={theme.id}
+                  onClick={() => handleThemeSelect(theme.id)}
+                  className={`
+                    relative group rounded-xl overflow-hidden border-2 transition-all duration-200
+                    ${isSelected
+                      ? "border-indigo-500 shadow-lg shadow-indigo-500/20 scale-[1.02]"
+                      : "border-gray-700 hover:border-gray-500"
+                    }
+                  `}
                 >
-                  <div className="flex items-center gap-2">
-                    <span>{cat.icon}</span>
-                    <span className="text-sm font-medium text-white">{t(`categories.${cat.slug}`)}</span>
-                    {cat.subcategories.some((s) => interests.includes(s.slug)) && (
-                      <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                        {cat.subcategories.filter((s) => interests.includes(s.slug)).length}
-                      </span>
-                    )}
+                  <div
+                    className="h-20 w-full"
+                    style={{ background: theme.preview }}
+                  />
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-900/80">
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: theme.accent }}
+                    />
+                    <span className="text-xs font-medium text-gray-300 truncate">
+                      {t(`profile.themes.${theme.id}`)}
+                    </span>
                   </div>
-                  <svg
-                    className={`w-4 h-4 text-gray-400 transition-transform ${expandedCategory === cat.id ? "rotate-180" : ""}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
                 </button>
-
-                {expandedCategory === cat.id && (
-                  <div className="px-4 py-3 space-y-1 bg-gray-900/30">
-                    {cat.subcategories.map((sub) => {
-                      const isSelected = interests.includes(sub.slug);
-                      return (
-                        <button
-                          key={sub.id}
-                          onClick={() => toggleInterest(sub.slug)}
-                          disabled={!isSelected && interests.length >= 20}
-                          className={`
-                            w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left
-                            ${isSelected
-                              ? "bg-indigo-600/20 text-indigo-300"
-                              : "text-gray-400 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                            }
-                          `}
-                        >
-                          {sub.icon && <span>{sub.icon}</span>}
-                          <span>{sub.name}</span>
-                          {isSelected && (
-                            <svg className="w-4 h-4 ml-auto text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

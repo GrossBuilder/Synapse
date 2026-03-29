@@ -10,6 +10,6 @@ export const config = {
     // - /_next (Next.js internals)
     // - /admin (admin panel — outside i18n)
     // - /icons, /favicon.ico, /manifest.json (static files)
-    "/((?!api|_next|admin|icons|favicon\\.ico|manifest\\.json).*)",
+    "/((?!api|_next|admin|icons|favicon\\.ico|manifest\\.json|sw\\.js).*)",
   ],
 };

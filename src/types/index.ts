@@ -82,6 +82,7 @@ export interface SocketEvents {
   "partner-signal": (data: SignalData) => void;
   "partner-disconnected": () => void;
   "chat-message": (data: { senderId: string; message: string }) => void;
+  "message-blocked": (data: { reason: string; categories: string[]; violationCount: number }) => void;
   "queue-position": (position: number) => void;
   "error": (message: string) => void;
 }

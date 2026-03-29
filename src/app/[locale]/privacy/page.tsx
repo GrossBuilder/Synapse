@@ -24,79 +24,73 @@ export default function PrivacyPage() {
 
           <div className="prose prose-invert prose-sm max-w-none space-y-6 text-gray-300">
             <section>
-              <h2 className="text-lg font-semibold text-white">1. Information We Collect</h2>
-              <p>We collect the following information when you use Synapse:</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS1Title")}</h2>
+              <p>{t("privacyS1Text")}</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>Account data:</strong> name, email address, hashed password, selected region</li>
-                <li><strong>Usage data:</strong> chat sessions, ratings, report history, Trust Score</li>
-                <li><strong>Payment data:</strong> USDT transaction IDs, wallet addresses (we do not store private keys)</li>
-                <li><strong>Technical data:</strong> IP address, browser type, device info (for WebRTC connections)</li>
+                {[1, 2, 3, 4].map((i) => (
+                  <li key={i}>{t(`privacyS1Li${i}`)}</li>
+                ))}
               </ul>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">2. How We Use Your Data</h2>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS2Title")}</h2>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>To provide and improve the Service</li>
-                <li>To match you with relevant partners based on interests and region</li>
-                <li>To calculate and maintain your Trust Score</li>
-                <li>To process payments and manage subscriptions</li>
-                <li>To enforce community guidelines and moderate content</li>
-                <li>To send important service notifications</li>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <li key={i}>{t(`privacyS2Li${i}`)}</li>
+                ))}
               </ul>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">3. Video & Audio</h2>
-              <p>Synapse uses peer-to-peer WebRTC technology for video and audio calls. <strong>Video and audio streams are transmitted directly between users and are NOT recorded, stored, or monitored by our servers.</strong> Our servers only handle signaling (connection setup) — the actual media never passes through our infrastructure unless a TURN relay is required for connectivity.</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS3Title")}</h2>
+              <p>{t("privacyS3Text")}</p>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">4. Data Storage & Security</h2>
-              <p>Your data is stored in encrypted PostgreSQL databases. Passwords are hashed using bcrypt with salt. All connections use TLS/SSL encryption. We implement rate limiting, JWT authentication, and other security measures to protect your data.</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS4Title")}</h2>
+              <p>{t("privacyS4Text")}</p>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">5. Data Sharing</h2>
-              <p>We do NOT sell, rent, or share your personal data with third parties, except:</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS5Title")}</h2>
+              <p>{t("privacyS5Text")}</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>When required by law or legal process</li>
-                <li>To protect the safety of users (e.g., reporting illegal activity to authorities)</li>
-                <li>With service providers essential to running the platform (hosting, CDN)</li>
+                {[1, 2, 3].map((i) => (
+                  <li key={i}>{t(`privacyS5Li${i}`)}</li>
+                ))}
               </ul>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">6. Cookies & Local Storage</h2>
-              <p>We use essential cookies for authentication (session tokens) and localStorage for user preferences (language, theme). We do not use tracking cookies or third-party analytics.</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS6Title")}</h2>
+              <p>{t("privacyS6Text")}</p>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">7. Your Rights</h2>
-              <p>You have the right to:</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS7Title")}</h2>
+              <p>{t("privacyS7Text")}</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>Access your personal data</li>
-                <li>Request correction of inaccurate data</li>
-                <li>Request deletion of your account and associated data</li>
-                <li>Export your data in a portable format</li>
-                <li>Object to processing of your data</li>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <li key={i}>{t(`privacyS7Li${i}`)}</li>
+                ))}
               </ul>
-              <p>To exercise these rights, contact us through the admin panel or support channels.</p>
+              <p>{t("privacyS7Outro")}</p>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">8. Data Retention</h2>
-              <p>Account data is retained as long as your account is active. Chat session metadata is retained for 90 days for moderation purposes. Report data is retained for 1 year. You may request full deletion at any time.</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS8Title")}</h2>
+              <p>{t("privacyS8Text")}</p>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">9. Children&apos;s Privacy</h2>
-              <p>Synapse is intended for users aged 18 and older. We do not knowingly collect data from individuals under 18. If we discover that a user is under 18, their account will be terminated immediately.</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS9Title")}</h2>
+              <p>{t("privacyS9Text")}</p>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white">10. Changes to This Policy</h2>
-              <p>We may update this Privacy Policy periodically. We will notify users of material changes through the platform. Continued use after changes constitutes acceptance.</p>
+              <h2 className="text-lg font-semibold text-white">{t("privacyS10Title")}</h2>
+              <p>{t("privacyS10Text")}</p>
             </section>
           </div>
         </div>

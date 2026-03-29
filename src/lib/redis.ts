@@ -35,4 +35,5 @@ export const REDIS_KEYS = {
   USER_PAYMENTS: (userId: string) => `payment:user:${userId}`,
   COMPLETED_TX: (txId: string) => `payment:tx:${txId}`,
   PAYMENT_MICRO_COUNTER: "payment:micro-counter",
+  PENDING_PAYMENTS: "payment:pending-set",
 } as const;

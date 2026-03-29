@@ -10,6 +10,7 @@ export async function GET() {
   }
 
   const userId = (session.user as { id: string }).id;
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {

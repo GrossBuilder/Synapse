@@ -17,18 +17,6 @@ interface Analytics {
   reportsByReason: Record<string, number>;
 }
 
-const REGION_LABELS: Record<string, string> = {
-  global: "🌍 Global",
-  europe: "🇪🇺 Europe",
-  "north-america": "🌎 N. America",
-  "south-america": "🌎 S. America",
-  asia: "🌏 Asia",
-  "middle-east": "🕌 Middle East",
-  africa: "🌍 Africa",
-  oceania: "🏝️ Oceania",
-  cis: "🏛️ CIS",
-};
-
 const BAR_COLORS = [
   "bg-indigo-500",
   "bg-emerald-500",
@@ -189,7 +177,7 @@ export default function AnalyticsPage() {
               return (
                 <div key={region}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-300">{REGION_LABELS[region] || region}</span>
+                    <span className="text-gray-300">{t(`region.${region}`)}</span>
                     <span className="text-gray-500">{count} ({pct.toFixed(1)}%)</span>
                   </div>
                   <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
