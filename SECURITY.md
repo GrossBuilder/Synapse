@@ -13,7 +13,7 @@
 
 If you discover a security vulnerability in Synapse, please report it responsibly:
 
-1. **Email:** Send a detailed report to **security@synapse.app**
+1. **Email:** Send a detailed report to **security@aetheriaarchitect.com** *(update when domain is ready)*
 2. **Include:**
    - Description of the vulnerability
    - Steps to reproduce

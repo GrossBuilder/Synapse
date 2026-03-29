@@ -121,4 +121,4 @@ Open a [Discussion](https://github.com/GrossBuilder/Synapse/discussions) or reac
 
 ---
 
-Thank you for helping make Synapse better! 🧠
+**AetheriaArchitect** — Thank you for helping make Synapse better! 🧠

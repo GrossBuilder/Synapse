@@ -197,5 +197,5 @@ This means:
 ---
 
 <p align="center">
-  Built with ❤️ for a safer internet
+  Built with ❤️ by <strong>AetheriaArchitect</strong> — for a safer internet
 </p>
